@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[]) {
     int i, npts, tap_npts;
-    float *data1, *data2, *data_cor, scale, mean = 0.;
+    float *data1, *data2, *data_cor, scale, lag_time;
     fftw_complex *in1, *in2, *out1, *out2, *cor_in, *cor_out;
     fftw_plan p1, p2, p3;
     SACHEAD hd1, hd2;
@@ -23,8 +23,10 @@ int main(int argc, char *argv[]) {
     data1 = read_sac(argv[1],&hd1);
     data2 = read_sac(argv[2],&hd2);
     npts = 2*hd1.npts-1;
-    tap_npts = (int)(npts*5./220.);
-    scale = npts;
+    lag_time = hd1.delta*(float)hd1.npts;
+    //printf("NPTS: %d LAG_TIME: %f  DLETA: %f\n",hd1.npts,lag_time,hd1.delta);
+    tap_npts = (int)(npts/50.);
+    scale = (float)npts;
 
     in1 = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npts);
     in2 = (fftw_complex*) fftw_malloc(sizeof(fftw_complex) * npts);
@@ -66,22 +68,17 @@ int main(int argc, char *argv[]) {
     fftw_execute(p3);
 
     for ( i = 0; i < npts; i ++ ) data_cor[i] = cor_out[i][0]/scale;
-    hd1.npts = npts; hd1.b = 0. - hd1.e;
+    hd1.npts = npts; hd1.b = 0. - lag_time; hd1.e = lag_time;
 
-    for ( i = 0; i < tap_npts; i ++ ) mean += data_cor[i]/tap_npts;
 
     for ( i = 0; i < tap_npts; i ++ ) {
-        data_cor[i] = sin(i*hd1.delta/100.)*mean;
-        data_cor[npts-tap_npts+i] = cos((npts-tap_npts+i)*hd1.delta/100.)*mean;
+        data_cor[i] = sin(i*hd1.delta/100.)*fabs(data_cor[tap_npts-1]);
+        data_cor[npts-tap_npts+i] = cos((npts-tap_npts+i)*hd1.delta/100.)*fabs(data_cor[npts-tap_npts]);
     }
 
     write_sac(argv[3],hd1,data_cor);
     fftw_destroy_plan(p3);
     fftw_free(cor_in); fftw_free(cor_out); free(data1); free(data2); free(data_cor);
 
-
     return 0;
-
-
-
 }
